@@ -240,7 +240,6 @@ def check_conflicting_values(entities):
     # =================================================
     # AGE VALIDATION
     # =================================================
-
     age = entities.get("age")
 
     if age is not None:
@@ -522,7 +521,100 @@ def check_text_consistency(text):
             })
 
     return errors
+# =========================================================
+# CROSS-PAGE VALIDATION
+# =========================================================
 
+def check_cross_page_consistency(text):
+
+    errors = []
+
+    page_sections = re.split(
+        r"\[Page\s+(\d+)\]",
+        text,
+        flags=re.IGNORECASE
+    )
+
+    pages = []
+
+    for i in range(1, len(page_sections), 2):
+
+        page_number = page_sections[i]
+        page_text = page_sections[i + 1]
+
+        pages.append({
+            "page": int(page_number),
+            "text": page_text
+        })
+
+    university_pattern = re.compile(
+        r"(?:university|institution)"
+        r"\s*[:\-]\s*([A-Za-z][A-Za-z .,&'-]{3,100})",
+        flags=re.IGNORECASE
+    )
+
+    university_values = []
+
+    for page in pages:
+
+        matches = university_pattern.findall(
+            page["text"]
+        )
+
+        for university in matches:
+
+            university = university.strip()
+
+            if university:
+
+                university_values.append({
+                    "value": university,
+                    "page": page["page"]
+                })
+
+    unique_values = []
+
+    for item in university_values:
+
+        if item not in unique_values:
+            unique_values.append(item)
+
+    normalized_values = {}
+
+    for item in unique_values:
+
+        normalized = re.sub(
+            r"\s+",
+            " ",
+            item["value"].lower()
+        ).strip()
+
+        normalized_values.setdefault(
+            normalized,
+            []
+        ).append(item)
+
+    if len(normalized_values) > 1:
+
+        details = []
+
+        for items in normalized_values.values():
+
+            for item in items:
+
+                details.append(
+                    f'{item["value"]} → Page {item["page"]}'
+                )
+
+        errors.append({
+            "type": "Cross-Page Institution Conflict",
+            "message":
+                "Different institutions were detected "
+                "on different pages: "
+                + "; ".join(details)
+        })
+
+    return errors
 # =========================================================
 # DATE RELATIONSHIP CHECK
 # =========================================================
@@ -698,6 +790,11 @@ def validate_document(
             text
         )
     )
+    errors.extend(
+    check_cross_page_consistency(
+        text
+    )
+)
 
     # -----------------------------------------------------
     # REQUIRED INFORMATION

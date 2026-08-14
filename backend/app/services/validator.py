@@ -1,5 +1,6 @@
 import re
 from datetime import datetime
+from difflib import SequenceMatcher
 
 
 # =========================================================
@@ -698,7 +699,61 @@ def validate_document(
             text
         )
     )
+        # -----------------------------------------------------
+    # CROSS-PAGE CONSISTENCY
+    # -----------------------------------------------------
 
+    cross_page_errors, cross_page_warnings = (
+        check_cross_page_consistency(
+            text
+        )
+    )
+
+    # If a conflict is already detected across pages,
+    # keep the more informative cross-page error and
+    # remove the generic duplicate error.
+
+    for cross_error in cross_page_errors:
+
+        cross_type = cross_error.get(
+            "type",
+            ""
+        )
+
+        if cross_type == "Cross-Page Conflicting Institution":
+
+            errors = [
+                error
+                for error in errors
+                if error.get("type")
+                != "Conflicting Institution"
+            ]
+
+        elif cross_type == "Cross-Page Conflicting Student Name":
+
+            errors = [
+                error
+                for error in errors
+                if error.get("type")
+                != "Conflicting Name"
+            ]
+
+        elif cross_type == "Cross-Page Conflicting Identification Number":
+
+            errors = [
+                error
+                for error in errors
+                if error.get("type")
+                != "Conflicting Identification Number"
+            ]
+
+    errors.extend(
+        cross_page_errors
+    )
+
+    warnings.extend(
+        cross_page_warnings
+    )
     # -----------------------------------------------------
     # REQUIRED INFORMATION
     # -----------------------------------------------------
@@ -777,3 +832,233 @@ def validate_document(
         "errors": errors,
         "warnings": warnings
     }
+# =========================================================
+# CROSS-PAGE VALIDATION
+# =========================================================
+
+def check_cross_page_consistency(text):
+    """
+    Compare important labelled information across pages.
+
+    Detects conflicting:
+    - Student/applicant names
+    - Universities/institutions
+    - Identification numbers
+    - Registration numbers
+    - Roll numbers
+    - Application numbers
+
+    The result includes the page numbers where the
+    conflicting values were found.
+    """
+
+    errors = []
+    warnings = []
+
+    if not text:
+        return errors, warnings
+
+    # -----------------------------------------------------
+    # SPLIT DOCUMENT INTO PAGES
+    # -----------------------------------------------------
+
+    page_pattern = r"\[Page\s+(\d+)\](.*?)(?=\[Page\s+\d+\]|$)"
+
+    page_matches = re.findall(
+        page_pattern,
+        text,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+
+    pages = []
+
+    for page_number, page_text in page_matches:
+
+        pages.append({
+            "page": int(page_number),
+            "text": page_text.strip()
+        })
+
+    if not pages:
+        return errors, warnings
+
+    # -----------------------------------------------------
+    # HELPER: NORMALIZE VALUES
+    # -----------------------------------------------------
+
+    def normalize_value(value):
+
+        value = value.lower()
+
+        value = re.sub(
+            r"\s+",
+            " ",
+            value
+        )
+
+        value = re.sub(
+            r"[^a-z0-9 ]",
+            "",
+            value
+        )
+
+        return value.strip()
+
+    # -----------------------------------------------------
+    # HELPER: EXTRACT LABELLED VALUES
+    # -----------------------------------------------------
+
+    def extract_labelled_values(
+        page_text,
+        patterns
+    ):
+
+        values = []
+
+        for pattern in patterns:
+
+            matches = re.findall(
+                pattern,
+                page_text,
+                flags=re.IGNORECASE
+            )
+
+            for match in matches:
+
+                if isinstance(match, tuple):
+                    value = match[-1]
+                else:
+                    value = match
+
+                value = value.strip()
+
+                if value:
+                    values.append(value)
+
+        return list(
+            dict.fromkeys(values)
+        )
+
+    # -----------------------------------------------------
+    # FIELD PATTERNS
+    # -----------------------------------------------------
+
+    field_patterns = {
+
+        "Student Name": [
+            r"(?:student\s+name|applicant\s+name)"
+            r"\s*[:\-]\s*([A-Za-z][A-Za-z .]{2,60})"
+        ],
+
+        "Institution": [
+            r"(?:university|institution)"
+            r"\s*[:\-]\s*([A-Za-z][A-Za-z .,&'\-]{3,100})"
+        ],
+
+        "Identification Number": [
+            r"(?:student\s*id|identification\s*number|"
+            r"registration\s*(?:number|no)|"
+            r"roll\s*(?:number|no)|"
+            r"application\s*(?:number|no)|"
+            r"admission\s*(?:number|no))"
+            r"\s*[:\-]\s*([A-Za-z0-9\/\-]{5,30})"
+        ]
+    }
+
+    # -----------------------------------------------------
+    # EXTRACT VALUES BY PAGE
+    # -----------------------------------------------------
+
+    field_occurrences = {}
+
+    for field_name, patterns in field_patterns.items():
+
+        field_occurrences[field_name] = []
+
+        for page in pages:
+
+            values = extract_labelled_values(
+                page["text"],
+                patterns
+            )
+
+            for value in values:
+
+                field_occurrences[field_name].append({
+                    "page": page["page"],
+                    "value": value
+                })
+
+    # -----------------------------------------------------
+    # COMPARE VALUES
+    # -----------------------------------------------------
+
+    for field_name, occurrences in field_occurrences.items():
+
+        if len(occurrences) < 2:
+            continue
+
+        # Group approximately identical values
+        groups = []
+
+        for occurrence in occurrences:
+
+            normalized = normalize_value(
+                occurrence["value"]
+            )
+
+            placed = False
+
+            for group in groups:
+
+                similarity = SequenceMatcher(
+                    None,
+                    normalized,
+                    group["normalized"]
+                ).ratio()
+
+                if similarity >= 0.90:
+
+                    group["occurrences"].append(
+                        occurrence
+                    )
+
+                    placed = True
+                    break
+
+            if not placed:
+
+                groups.append({
+                    "normalized": normalized,
+                    "value": occurrence["value"],
+                    "occurrences": [occurrence]
+                })
+
+        # -------------------------------------------------
+        # CONFLICT DETECTED
+        # -------------------------------------------------
+
+        if len(groups) > 1:
+
+            values_text = []
+
+            for group in groups:
+
+                pages_text = ", ".join(
+                    f"Page {item['page']}"
+                    for item in group["occurrences"]
+                )
+
+                values_text.append(
+                    f"{group['value']} ({pages_text})"
+                )
+
+            errors.append({
+                "type": f"Cross-Page Conflicting {field_name}",
+                "message":
+                    f"Different {field_name.lower()} values "
+                    f"were detected across pages: "
+                    + "; ".join(values_text)
+            })
+
+    return errors, warnings

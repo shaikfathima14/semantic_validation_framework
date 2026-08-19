@@ -18,6 +18,16 @@ pipeline {
             }
         }
 
+        stage('Stop Previous Application') {
+            steps {
+                echo 'Stopping previous application...'
+
+                // Stop and remove existing containers.
+                // "|| exit 0" prevents failure if nothing is running.
+                bat 'docker compose down || exit 0'
+            }
+        }
+
         stage('Start Application') {
             steps {
                 echo 'Starting application...'

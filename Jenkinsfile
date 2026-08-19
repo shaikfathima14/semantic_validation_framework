@@ -18,19 +18,21 @@ pipeline {
             }
         }
 
-        stage('Stop Previous Application') {
+        stage('Clean Previous Containers') {
             steps {
-                echo 'Stopping previous application...'
+                echo 'Removing previous SemanticAI containers...'
 
-                // Stop and remove existing containers.
-                // "|| exit 0" prevents failure if nothing is running.
-                bat 'docker compose down || exit 0'
+                bat 'docker rm -f semantic-backend 2>NUL || exit 0'
+                bat 'docker rm -f semantic-frontend 2>NUL || exit 0'
+
+                echo 'Cleaning old Compose deployment...'
+                bat 'docker compose down --remove-orphans 2>NUL || exit 0'
             }
         }
 
         stage('Start Application') {
             steps {
-                echo 'Starting application...'
+                echo 'Starting SemanticAI application...'
                 bat 'docker compose up -d'
             }
         }

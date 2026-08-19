@@ -1,8 +1,11 @@
 import Navbar from "../../components/layout/Navbar";
 import hero from "../../assets/images/hero.svg";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
 function LandingPage() {
+  const navigate = useNavigate();
+
   return (
     <>
       <Navbar />
@@ -49,16 +52,26 @@ function LandingPage() {
 
             <div className="mt-10 flex gap-5">
 
-              <button className="bg-primary text-white px-8 py-4 rounded-full shadow-soft hover:scale-105 transition">
+              {/* GET STARTED */}
 
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="bg-primary text-white px-8 py-4 rounded-full shadow-soft hover:scale-105 transition"
+              >
                 Get Started
-
               </button>
 
-              <button className="bg-white border border-primary text-primary px-8 py-4 rounded-full hover:bg-blue-50">
+              {/* LEARN MORE */}
 
+              <button
+                onClick={() => {
+                  document
+                    .getElementById("about")
+                    ?.scrollIntoView({ behavior: "smooth" });
+                }}
+                className="bg-white border border-primary text-primary px-8 py-4 rounded-full hover:bg-blue-50"
+              >
                 Learn More
-
               </button>
 
             </div>
@@ -75,13 +88,73 @@ function LandingPage() {
 
             <img
               src={hero}
-              alt="Hero"
+              alt="Semantic Validation"
               className="w-full"
             />
 
           </motion.div>
 
         </div>
+
+        {/* ABOUT / LEARN MORE SECTION */}
+
+        <section
+          id="about"
+          className="max-w-7xl mx-auto mt-24 pb-20"
+        >
+
+          <div className="bg-white rounded-3xl shadow-soft p-10">
+
+            <h2 className="text-3xl font-bold text-primary mb-5">
+              About SemanticAI
+            </h2>
+
+            <p className="text-gray-600 text-lg leading-8">
+              SemanticAI is an AI-powered e-governance validation
+              framework designed to analyze citizen documents before
+              government submission.
+            </p>
+
+            <div className="grid md:grid-cols-3 gap-6 mt-8">
+
+              <div className="bg-blue-50 rounded-2xl p-6">
+                <h3 className="font-bold text-xl text-primary">
+                  NLP Validation
+                </h3>
+
+                <p className="text-gray-600 mt-2">
+                  Extracts and analyzes important information from
+                  uploaded documents.
+                </p>
+              </div>
+
+              <div className="bg-blue-50 rounded-2xl p-6">
+                <h3 className="font-bold text-xl text-primary">
+                  Error Detection
+                </h3>
+
+                <p className="text-gray-600 mt-2">
+                  Detects missing, conflicting and inconsistent
+                  information.
+                </p>
+              </div>
+
+              <div className="bg-blue-50 rounded-2xl p-6">
+                <h3 className="font-bold text-xl text-primary">
+                  Smart Reports
+                </h3>
+
+                <p className="text-gray-600 mt-2">
+                  Provides a clear validation score, errors and
+                  warnings for the user.
+                </p>
+              </div>
+
+            </div>
+
+          </div>
+
+        </section>
 
       </section>
 

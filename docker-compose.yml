@@ -1,0 +1,23 @@
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: Docker/backend.Dockerfile
+    container_name: semantic-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/uploads:/app/uploads
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Docker/frontend.Dockerfile
+    container_name: semantic-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
